@@ -1,0 +1,5 @@
+{
+    "lr": 0.001,
+    "batch_size": 512,
+    "patience": 10
+}

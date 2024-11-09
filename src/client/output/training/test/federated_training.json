@@ -1,0 +1,7 @@
+{
+    "job_id": "test",
+    "rounds": 100,
+    "output": [
+        "weights"
+    ]
+}

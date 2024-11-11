@@ -1,9 +1,12 @@
+import os
+import json
 import pytest
 from src.api import app
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+API_KEY = os.getenv("API_KEY")
 client = TestClient(app)
+
 
 class TestEndPoints:
 
@@ -18,53 +21,57 @@ class TestEndPoints:
 
 class TestConfigurationMethods:
 
-    def test_configure_pass(self):
+    def test_configure_pass(self, create_payload):
 
-        payload = {
-            "local": {
-                "lr": 1e-3,
-                "batch_size": 512,
-                "patience": 10
-            },
-            "federated": {
-                "job_id": "test",
-                "rounds": 100,
-                "output": ["weights"]
-            }
-        }
+        # create payload for configuration
+        payload = create_payload()
+
+        job_id = payload['federated']['job_id']
 
         # post the response
         response = client.post(
             "/configure",
-            headers={'x-key': '6b8e92be-fc0a-4db5-b8dc-c35dc05d1108'},
+            headers={'x-key': API_KEY},
             json=payload
         )
 
         assert response.status_code == 200
-        assert response.json() == {"message": "successfully registered the configuration"}
+        assert response.json() == {"message": f"Successfully registered the training procedure for job_id: {job_id}"}
 
-    def test_configure_failure(self):
+    def test_configure_failure(self, create_payload):
 
-        payload = {
-            "local": {
-                "lr": 1e-3,
-                "batch_size": 512,
-                "patience": 10
-            }
-        }
+        # drop the federated information from payload
+        payload = create_payload(drop=["federated"])
 
         # post the response
         response = client.post(
             "/configure",
-            headers={'x-key': '6b8e92be-fc0a-4db5-b8dc-c35dc05d1108'},
+            headers={'x-key': API_KEY},
             json=payload
         )
 
         assert response.status_code == 500
         assert response.json() == {
             "detail": f"""
-                failed to register the configuration... \\
-                please confirm you have the local and federated \\
-                fields with the job_id specified in the federated field
+                Failed to register the training procedure
             """
         }
+
+    def test_key_issue(self, create_payload):
+
+        payload = create_payload()
+
+        # post the response
+        response = client.post(
+            "/configure",
+            json=payload
+        )
+
+        # post the response
+        response = client.post(
+            "/configure",
+            headers={'x-key': 'silly-me-i-put-the-wrong-key'},
+            json=payload
+        )
+
+        assert response.status_code == 403

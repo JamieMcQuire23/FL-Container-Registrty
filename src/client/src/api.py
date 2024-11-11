@@ -3,6 +3,7 @@ import json
 from typing import Dict
 from pathlib import Path
 from loguru import logger
+from src.verification import ModelStateCheck
 from fastapi.security.api_key import APIKeyHeader
 from fastapi import FastAPI, HTTPException, Depends, Request
 
@@ -30,6 +31,49 @@ def read_root():
 def health_check():
     return {"status": "Healthy"}
 
+@app.post("/train", dependencies=[Depends(verify_api_key)])
+async def train(request: Request):
+    '''
+    function that runs the training procedure
+    '''
+    try:
+        
+        # await the payload
+        payload = await request.json()
+
+        # get the job id
+        job_id = payload.get('job_id')
+
+        # define the pth
+        job_pth = OUTPUT_DIR / "training" / job_id
+        local_pth = job_pth / "local_training.json"
+        model_pth = job_pth / "model.json"
+
+        # initialize the checker 
+        model_checker = ModelStateCheck(local_pth, model_pth)
+
+        # run the verification
+        model_checker.call(payload)
+
+        # load the model
+
+        # train the model
+
+        logger.info(f"Trained for job_id: {job_id}")
+        
+        {"message": f"Trained for job_id: {job_id}"}
+
+
+    except Exception as e:
+        logger.error(f"Failed to train when instructed")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"""
+                Failed to train when instructed
+            """
+        )
+
+
 @app.post("/configure", dependencies=[Depends(verify_api_key)])
 async def configure(request: Request):
     '''
@@ -42,19 +86,21 @@ async def configure(request: Request):
         
         # dowload the configuration information
         local = payload.get('local')
-        federated= payload.get('federated')
+        federated = payload.get('federated')
+        state_dict = payload.get('model')
 
         # retrive the job_id and the model_id
         job_id = federated["job_id"]
 
         # create the directory for the training job if it does not exist
-        new_folder_path = OUTPUT_DIR / "training" / job_id
-        new_folder_path.mkdir(parents=True, exist_ok=True)
+        new_folder_pth = OUTPUT_DIR / "training" / job_id
+        new_folder_pth.mkdir(parents=True, exist_ok=True)
 
         # infromation to save
         configuration = {
-            new_folder_path / "local_training.json": local,
-            new_folder_path / "federated_training.json": federated
+            new_folder_pth / "local_training.json": local,
+            new_folder_pth / "federated_training.json": federated,
+            new_folder_pth / "model.json": state_dict
         }
 
         # save the configuration
@@ -64,16 +110,16 @@ async def configure(request: Request):
                 json_file.close()
                 logger.info(f"SAVED FILE: {pth}")
 
-        return {"message": "successfully registered the configuration"}
+        logger.info(f"Successfully registered the training procedure for job_id: {job_id}")
+
+        return {"message": f"Successfully registered the training procedure for job_id: {job_id}"}
 
     except Exception as e:
-        logger.error("FAILED TO REGISTER FL TRAINING PROCEDURE")
+        logger.error(f"Failed to register the training procedure")
         raise HTTPException(
             status_code=500, 
             detail=f"""
-                failed to register the configuration... \\
-                please confirm you have the local and federated \\
-                fields with the job_id specified in the federated field
+                Failed to register the training procedure
             """
         )
 
